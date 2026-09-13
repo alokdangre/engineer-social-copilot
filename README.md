@@ -65,3 +65,25 @@ BACKEND_URL=https://your-backend.example
 The frontend proxies API requests through its own origin so the application session stays in a
 secure HTTP-only cookie. Keep `APP_SECRET_KEY` stable across deployments because it signs user
 sessions and encrypts stored connector credentials.
+
+## Per-user LLM API keys
+
+After signing in, each user must open **Settings**, choose Google Gemini or OpenAI, and save
+their own API key. The key is encrypted at rest with `APP_SECRET_KEY`, is scoped to that user,
+and is never returned by the API; the UI only receives the last four characters. If a user has
+not configured a key, AI workflows use their deterministic fallback rather than a shared
+production credential.
+
+Changing `APP_SECRET_KEY` after users have saved connector or LLM credentials makes the stored
+encrypted values unreadable. Keep it stable, backed up, and available only to the backend.
+
+## Render with Neon Postgres
+
+Do not copy the local `.env` file wholesale into Render: its database URLs intentionally point
+to `localhost`, which means the Render container itself. In the backend service's Render
+Environment settings, set `DATABASE_URL` to Neon's complete externally reachable connection
+string. A `postgresql://` Neon URL is accepted and normalized to the async psycopg driver.
+
+If `CHECKPOINT_DATABASE_URL` is set, it must also be a reachable Postgres connection string;
+otherwise leave it empty. Production startup rejects a `DATABASE_URL` whose host is
+`localhost`, `127.0.0.1`, or `::1` and reports the configuration error directly.

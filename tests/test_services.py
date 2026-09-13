@@ -10,12 +10,13 @@ from social_manager.agent.schemas import (
     RecommendationCandidate,
     ResearchFinding,
 )
-from social_manager.db.models import PlatformContent, User
+from social_manager.db.models import PlatformContent, User, UserLLMCredential
 from social_manager.domain.enums import (
     ActionType,
     ContentType,
     EvidenceStatus,
     FeedbackScope,
+    LLMProvider,
     MemoryCategory,
     Platform,
     RecommendationStatus,
@@ -25,6 +26,7 @@ from social_manager.domain.enums import (
 )
 from social_manager.domain.schemas import (
     ActionPerformedInput,
+    LLMCredentialInput,
     MemoryCreate,
     MemoryLinkCreate,
     MemoryUpdate,
@@ -36,6 +38,7 @@ from social_manager.domain.schemas import (
 )
 from social_manager.services.content import ContentService
 from social_manager.services.events import EventService
+from social_manager.services.llm_credentials import LLMCredentialService
 from social_manager.services.memory import MemoryNotFoundError, MemoryService
 from social_manager.services.recommendations import (
     InvalidRecommendationTransition,
@@ -83,6 +86,50 @@ async def test_user_service(db_session: AsyncSession) -> None:
     # Update user
     updated = await svc.update(db_session, user, UserUpdate(display_name="Updated Display Name"))
     assert updated.display_name == "Updated Display Name"
+
+
+@pytest.mark.asyncio
+async def test_llm_credential_service(
+    db_session: AsyncSession,
+    test_user: User,
+) -> None:
+    service = LLMCredentialService()
+    api_key = "sk-test-user-owned-key-1234"
+
+    saved = await service.upsert(
+        db_session,
+        test_user.id,
+        LLMCredentialInput(provider=LLMProvider.OPENAI, api_key=api_key),
+    )
+    assert saved.configured is True
+    assert saved.provider is LLMProvider.OPENAI
+    assert saved.key_hint == "1234"
+
+    stored = await db_session.scalar(
+        select(UserLLMCredential).where(UserLLMCredential.user_id == test_user.id)
+    )
+    assert stored is not None
+    assert stored.encrypted_api_key != api_key
+    assert api_key not in stored.encrypted_api_key
+
+    resolved = await service.resolve(db_session, test_user.id)
+    assert resolved is not None
+    assert resolved.provider is LLMProvider.OPENAI
+    assert resolved.api_key == api_key
+
+    other = await UserService().create(
+        db_session,
+        UserCreate(
+            email="llm-other-user@example.com",
+            display_name="Other LLM User",
+            password="StrongPassword123!",
+        ),
+    )
+    assert (await service.describe(db_session, other.id)).configured is False
+    assert await service.resolve(db_session, other.id) is None
+
+    await service.delete(db_session, test_user.id)
+    assert (await service.describe(db_session, test_user.id)).configured is False
 
 
 @pytest.mark.asyncio

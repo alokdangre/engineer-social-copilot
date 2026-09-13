@@ -8,7 +8,7 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from social_manager.db.models import ConnectorAccount, User
+from social_manager.db.models import ConnectorAccount, User, UserLLMCredential
 
 
 @pytest.mark.asyncio
@@ -66,6 +66,50 @@ async def test_api_users_me(client: AsyncClient, test_user: User) -> None:
     data = response.json()
     assert data["id"] == test_user.id
     assert data["email"] == test_user.email
+
+
+@pytest.mark.asyncio
+async def test_api_user_llm_credential(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_user: User,
+) -> None:
+    initial = await client.get("/api/v1/users/me/llm-credential")
+    assert initial.status_code == 200
+    assert initial.json() == {
+        "configured": False,
+        "provider": None,
+        "key_hint": None,
+        "updated_at": None,
+    }
+
+    plaintext_key = "test-user-gemini-api-key-9876"
+    saved = await client.put(
+        "/api/v1/users/me/llm-credential",
+        json={"provider": "gemini", "api_key": plaintext_key},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["configured"] is True
+    assert saved.json()["provider"] == "gemini"
+    assert saved.json()["key_hint"] == "9876"
+    assert "api_key" not in saved.json()
+
+    stored = await db_session.scalar(
+        select(UserLLMCredential).where(UserLLMCredential.user_id == test_user.id)
+    )
+    assert stored is not None
+    assert stored.encrypted_api_key != plaintext_key
+    assert plaintext_key not in stored.encrypted_api_key
+
+    read_back = await client.get("/api/v1/users/me/llm-credential")
+    assert read_back.status_code == 200
+    assert read_back.json()["key_hint"] == "9876"
+    assert "api_key" not in read_back.json()
+
+    deleted = await client.delete("/api/v1/users/me/llm-credential")
+    assert deleted.status_code == 204
+    after_delete = await client.get("/api/v1/users/me/llm-credential")
+    assert after_delete.json()["configured"] is False
 
 
 @pytest.mark.asyncio

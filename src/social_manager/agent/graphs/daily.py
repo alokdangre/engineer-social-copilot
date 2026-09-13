@@ -117,6 +117,7 @@ def build_daily_capture_graph(
             },
             fallback=fallback,
             role="extraction",
+            user_id=state["user_id"],
         )
         return {"daily_analysis": analysis.model_dump(mode="json")}
 

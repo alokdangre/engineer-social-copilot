@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -31,7 +32,10 @@ class Settings(BaseSettings):
     openai_base_url: str | None = None
     reasoning_model: str = "gemini-2.5-flash"
     extraction_model: str = "gemini-2.5-flash"
-    embedding_model: str = "text-embedding-004"
+    embedding_model: str = "gemini-embedding-001"
+    openai_reasoning_model: str = "gpt-4.1-mini"
+    openai_extraction_model: str = "gpt-4.1-mini"
+    openai_embedding_model: str = "text-embedding-3-small"
     model_fallback_enabled: bool = True
 
     langsmith_tracing: bool = False
@@ -109,12 +113,18 @@ class Settings(BaseSettings):
             and self.app_secret_key.get_secret_value() == "development-only-change-me"
         ):
             raise RuntimeError("APP_SECRET_KEY must be set to a strong value in production")
-        if (
-            self.app_env == "production"
-            and self.gemini_api_key is None
-            and self.openai_api_key is None
-        ):
-            raise RuntimeError("GEMINI_API_KEY or OPENAI_API_KEY is required in production")
+        if self.app_env == "production":
+            database_urls = [("DATABASE_URL", self.database_url)]
+            if self.checkpoint_database_url:
+                database_urls.append(
+                    ("CHECKPOINT_DATABASE_URL", self.checkpoint_database_url)
+                )
+            for variable_name, database_url in database_urls:
+                if make_url(database_url).host in {"localhost", "127.0.0.1", "::1"}:
+                    raise RuntimeError(
+                        f"{variable_name} cannot point to localhost in production; "
+                        "set it to the externally reachable Neon Postgres URL"
+                    )
 
 
 @lru_cache

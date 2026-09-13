@@ -75,6 +75,7 @@ def build_research_graph(
             system_prompt=RESEARCH_SYSTEM_PROMPT,
             payload={"research_context": context},
             fallback=fallback,
+            user_id=state["user_id"],
         )
         return {"ecosystem_analysis": analysis.model_dump(mode="json")}
 

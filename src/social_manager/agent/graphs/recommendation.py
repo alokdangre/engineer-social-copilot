@@ -137,6 +137,7 @@ def build_recommendation_graph(
             system_prompt=RECOMMENDATION_SYSTEM_PROMPT,
             payload={"recommendation_context": context},
             fallback=fallback,
+            user_id=state["user_id"],
         )
         return {"recommendation_set": generated.model_dump(mode="json")}
 

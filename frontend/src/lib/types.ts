@@ -91,6 +91,15 @@ export interface UserAccount {
   created_at: string;
 }
 
+export type LLMProvider = "gemini" | "openai";
+
+export interface LLMCredentialStatus {
+  configured: boolean;
+  provider: LLMProvider | null;
+  key_hint: string | null;
+  updated_at: string | null;
+}
+
 export interface Recommendation {
   id: string;
   action_type: ActionType;

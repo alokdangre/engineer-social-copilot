@@ -32,7 +32,11 @@ class MemoryService:
         record = self._build_record(
             user_id,
             data,
-            await self.model_gateway.embed(f"{data.title}\n{data.statement}"),
+            await self.model_gateway.embed(
+                f"{data.title}\n{data.statement}",
+                user_id=user_id,
+                session=session,
+            ),
         )
         session.add(record)
         await session.commit()
@@ -44,7 +48,11 @@ class MemoryService:
     ) -> list[MemoryRecord]:
         records: list[MemoryRecord] = []
         for item in items:
-            embedding = await self.model_gateway.embed(f"{item.title}\n{item.statement}")
+            embedding = await self.model_gateway.embed(
+                f"{item.title}\n{item.statement}",
+                user_id=user_id,
+                session=session,
+            )
             record = self._build_record(user_id, item, embedding)
             session.add(record)
             records.append(record)
@@ -140,7 +148,11 @@ class MemoryService:
         for key, value in changes.items():
             setattr(record, key, value)
         if "title" in changes or "statement" in changes:
-            record.embedding = await self.model_gateway.embed(f"{record.title}\n{record.statement}")
+            record.embedding = await self.model_gateway.embed(
+                f"{record.title}\n{record.statement}",
+                user_id=user_id,
+                session=session,
+            )
         await session.commit()
         await session.refresh(record)
         return record

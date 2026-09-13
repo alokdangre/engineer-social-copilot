@@ -124,6 +124,7 @@ def build_outcome_graph(
             system_prompt=OUTCOME_SYSTEM_PROMPT,
             payload={"outcome_context": context},
             fallback=fallback,
+            user_id=state["user_id"],
         )
         return {"outcome_analysis": analysis.model_dump(mode="json")}
 

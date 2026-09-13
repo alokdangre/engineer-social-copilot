@@ -2,30 +2,42 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  Settings,
   Target,
   Clock,
   Play,
   Plus,
   CheckCircle,
-  RefreshCw,
   AlertCircle,
-  Layers,
+  KeyRound,
+  Trash2,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Goal, SchedulerStatus, GoalCreate } from "@/lib/types";
+import { useAuth } from "@/components/auth/AuthProvider";
+import type {
+  Goal,
+  GoalCreate,
+  LLMCredentialStatus,
+  LLMProvider,
+  SchedulerStatus,
+} from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/Card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 
 export default function SettingsPage() {
+  const { refreshLLMCredential } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
+  const [llmCredential, setLLMCredential] = useState<LLMCredentialStatus | null>(null);
+  const [llmProvider, setLLMProvider] = useState<LLMProvider>("gemini");
+  const [llmApiKey, setLLMApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRunningJob, setIsRunningJob] = useState(false);
+  const [isSavingLLM, setIsSavingLLM] = useState(false);
 
   // Add Goal modal
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -46,12 +58,17 @@ export default function SettingsPage() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [goalsData, schedData] = await Promise.all([
+      const [goalsData, schedData, credentialData] = await Promise.all([
         api.listGoals(),
         api.getSchedulerStatus(),
+        api.getLLMCredential(),
       ]);
       setGoals(goalsData);
       setSchedulerStatus(schedData);
+      setLLMCredential(credentialData);
+      if (credentialData.provider) {
+        setLLMProvider(credentialData.provider);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to load settings data";
       setErrorMessage(msg);
@@ -91,7 +108,7 @@ export default function SettingsPage() {
   const handleTriggerScheduler = async () => {
     setIsRunningJob(true);
     try {
-      const res = await api.runScheduler();
+      await api.runScheduler();
       showToast("Background jobs completed: retention purged, measurements checked.");
       await loadData();
     } catch (err: unknown) {
@@ -99,6 +116,51 @@ export default function SettingsPage() {
       setErrorMessage(msg);
     } finally {
       setIsRunningJob(false);
+    }
+  };
+
+  const handleSaveLLM = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (llmApiKey.trim().length < 10) {
+      setErrorMessage("Enter a valid API key (at least 10 characters).");
+      return;
+    }
+
+    setIsSavingLLM(true);
+    setErrorMessage(null);
+    try {
+      const credential = await api.saveLLMCredential(llmProvider, llmApiKey.trim());
+      setLLMCredential(credential);
+      setLLMApiKey("");
+      await refreshLLMCredential();
+      showToast("Your LLM API key was encrypted and saved.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save the API key";
+      setErrorMessage(msg);
+    } finally {
+      setIsSavingLLM(false);
+    }
+  };
+
+  const handleDeleteLLM = async () => {
+    setIsSavingLLM(true);
+    setErrorMessage(null);
+    try {
+      await api.deleteLLMCredential();
+      setLLMCredential({
+        configured: false,
+        provider: null,
+        key_hint: null,
+        updated_at: null,
+      });
+      setLLMApiKey("");
+      await refreshLLMCredential();
+      showToast("Your LLM API key was removed.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to remove the API key";
+      setErrorMessage(msg);
+    } finally {
+      setIsSavingLLM(false);
     }
   };
 
@@ -129,14 +191,95 @@ export default function SettingsPage() {
       <div className="border-b border-zinc-800 pb-5">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
-            Goals & Background Scheduler
+            Account Settings
           </h1>
           <Badge variant="primary" size="sm">System Configuration</Badge>
         </div>
         <p className="mt-1 text-sm text-zinc-400">
-          Manage career priorities, audience goals, and monitor automated retention & measurement tasks.
+          Add your own AI provider key, manage goals, and monitor background tasks.
         </p>
       </div>
+
+      <Card className="border-indigo-800/70 bg-indigo-950/20">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-indigo-400" />
+                Your LLM API key
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Required for personalized analysis, research, recommendations, and embeddings.
+              </CardDescription>
+            </div>
+            <Badge variant={llmCredential?.configured ? "success" : "warning"}>
+              {llmCredential?.configured ? "Configured" : "Action required"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSaveLLM} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+              <Select
+                label="Provider"
+                value={llmProvider}
+                onChange={(event) => setLLMProvider(event.target.value as LLMProvider)}
+                options={[
+                  { value: "gemini", label: "Google Gemini" },
+                  { value: "openai", label: "OpenAI" },
+                ]}
+                disabled={isLoading || isSavingLLM}
+              />
+              <Input
+                label={llmCredential?.configured ? "Replace API key" : "API key"}
+                type="password"
+                value={llmApiKey}
+                onChange={(event) => setLLMApiKey(event.target.value)}
+                placeholder={
+                  llmCredential?.configured && llmCredential.key_hint
+                    ? `Current key ends in ${llmCredential.key_hint}`
+                    : llmProvider === "gemini"
+                      ? "Paste your Google AI Studio API key"
+                      : "Paste your OpenAI API key"
+                }
+                helperText="The full key is never returned after you save it."
+                autoComplete="off"
+                disabled={isLoading || isSavingLLM}
+                required
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-4">
+              <p className="max-w-xl text-xs leading-5 text-zinc-400">
+                The key is encrypted with the server secret and used only for your workflows.
+                Provider usage is billed directly to your own account.
+              </p>
+              <div className="flex items-center gap-2">
+                {llmCredential?.configured ? (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={handleDeleteLLM}
+                    disabled={isSavingLLM}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove
+                  </Button>
+                ) : null}
+                <Button
+                  type="submit"
+                  size="sm"
+                  isLoading={isSavingLLM}
+                  disabled={isLoading || llmApiKey.trim().length < 10}
+                >
+                  {llmCredential?.configured ? "Replace key" : "Save key"}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Career Goals Section */}
       <div className="space-y-4">
@@ -315,4 +458,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

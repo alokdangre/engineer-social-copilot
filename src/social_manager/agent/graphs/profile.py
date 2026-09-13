@@ -55,6 +55,7 @@ def build_profile_graph(
             system_prompt=PROFILE_SYSTEM_PROMPT,
             payload={"source_context": context},
             fallback=fallback,
+            user_id=state["user_id"],
         )
         return {"profile_analysis": analysis.model_dump(mode="json")}
 

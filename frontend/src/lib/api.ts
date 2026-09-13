@@ -5,6 +5,8 @@ import type {
   Goal,
   GoalCreate,
   Hypothesis,
+  LLMCredentialStatus,
+  LLMProvider,
   MemoryCreate,
   MemoryLink,
   MemoryRecord,
@@ -105,6 +107,18 @@ export const api = {
     }),
 
   getCurrentUser: () => request<UserAccount>("/users/me"),
+
+  getLLMCredential: () =>
+    request<LLMCredentialStatus>("/users/me/llm-credential"),
+
+  saveLLMCredential: (provider: LLMProvider, apiKey: string) =>
+    request<LLMCredentialStatus>("/users/me/llm-credential", {
+      method: "PUT",
+      body: JSON.stringify({ provider, api_key: apiKey }),
+    }),
+
+  deleteLLMCredential: () =>
+    request<void>("/users/me/llm-credential", { method: "DELETE" }),
 
   logout: async (): Promise<void> => {
     await request<void>("/auth/logout", { method: "POST" });
