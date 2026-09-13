@@ -2,6 +2,12 @@
 
 This repository contains the product and workflow plan for an AI agent that helps a developer become known for credible technical work, build relationships with founders and maintainers, find career opportunities, and grow toward a DevRel role.
 
+## Demo Video
+
+[![Watch the Demo Video](https://img.shields.io/badge/YouTube-Watch%20Demo-red?style=for-the-badge&logo=youtube)](https://youtu.be/-mikLpVxYfA)
+
+Watch the complete end-to-end walkthrough on YouTube: **[https://youtu.be/-mikLpVxYfA](https://youtu.be/-mikLpVxYfA)**
+
 The first version connects three external apps:
 
 - **GitHub** supplies evidence of projects, contributions, technologies, and technical progress.
