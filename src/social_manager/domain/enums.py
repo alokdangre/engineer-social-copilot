@@ -17,6 +17,11 @@ class ConnectorStatus(StrEnum):
     ERROR = "error"
 
 
+class LLMProvider(StrEnum):
+    GEMINI = "gemini"
+    OPENAI = "openai"
+
+
 class MemoryCategory(StrEnum):
     IDENTITY_PREFERENCE = "identity_preference"
     GOAL_AUDIENCE = "goal_audience"

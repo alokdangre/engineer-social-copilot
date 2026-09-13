@@ -12,6 +12,7 @@ from social_manager.domain.enums import (
     EvidenceStatus,
     FeedbackScope,
     HypothesisStatus,
+    LLMProvider,
     MemoryCategory,
     Platform,
     RecommendationStatus,
@@ -52,6 +53,18 @@ class UserUpdate(BaseModel):
 class AccessToken(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class LLMCredentialInput(BaseModel):
+    provider: LLMProvider
+    api_key: SecretStr = Field(min_length=10, max_length=4096)
+
+
+class LLMCredentialRead(BaseModel):
+    configured: bool
+    provider: LLMProvider | None = None
+    key_hint: str | None = None
+    updated_at: datetime | None = None
 
 
 class ConnectorRead(ORMModel):

@@ -35,6 +35,20 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
+class UserLLMCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "user_llm_credentials"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_llm_credential"),)
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    encrypted_api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    key_hint: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
 class OAuthState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "oauth_states"
 
