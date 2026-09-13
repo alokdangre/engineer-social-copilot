@@ -13,12 +13,13 @@ import type {
   ReviewInput,
   SchedulerStatus,
   StrategyVersion,
+  UserAccount,
   WorkflowInvocationResult,
   WorkflowKind,
   WorkflowRun,
 } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+const API_BASE = "/api/v1";
 
 // In-memory token storage (never localStorage, compliant with Secure Web Skills)
 let inMemoryToken: string | null = null;
@@ -45,6 +46,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -78,6 +80,7 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData,
+      credentials: "include",
     });
     if (!res.ok) {
       throw new Error("Failed to login. Please check your credentials.");
@@ -87,15 +90,25 @@ export const api = {
     return data.access_token;
   },
 
-  register: async (email: string, displayName: string, password: string): Promise<void> => {
-    await request("/auth/register", {
+  register: async (
+    email: string,
+    displayName: string,
+    password: string
+  ): Promise<UserAccount> =>
+    request<UserAccount>("/auth/register", {
       method: "POST",
       body: JSON.stringify({
         email,
         display_name: displayName,
         password,
       }),
-    });
+    }),
+
+  getCurrentUser: () => request<UserAccount>("/users/me"),
+
+  logout: async (): Promise<void> => {
+    await request<void>("/auth/logout", { method: "POST" });
+    setAuthToken(null);
   },
 
   // Health
@@ -211,7 +224,7 @@ export const api = {
     ),
 
   getAuthorizeUrl: (platform: string) =>
-    request<{ authorization_url: string; state: string }>(`/connectors/${encodeURIComponent(platform)}/authorize`, {
+    request<{ platform: string; authorization_url: string; expires_at: string }>(`/connectors/${encodeURIComponent(platform)}/authorize`, {
       method: "POST",
     }),
 
@@ -223,4 +236,3 @@ export const api = {
       method: "POST",
     }),
 };
-

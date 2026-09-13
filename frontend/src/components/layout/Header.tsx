@@ -1,11 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Sparkles, Activity, ShieldCheck } from "lucide-react";
+import { Sparkles, Activity, ShieldCheck, LogOut } from "lucide-react";
 import { api } from "@/lib/api";
+import type { UserAccount } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 
-export const Header: React.FC<{ onRunCycle?: () => void }> = ({ onRunCycle }) => {
+export const Header: React.FC<{
+  user: UserAccount;
+  onLogout: () => Promise<void>;
+  onRunCycle?: () => void;
+}> = ({ user, onLogout, onRunCycle }) => {
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
@@ -73,8 +78,16 @@ export const Header: React.FC<{ onRunCycle?: () => void }> = ({ onRunCycle }) =>
             Generate Daily Recommendations
           </Button>
         )}
+
+        <div className="hidden text-right lg:block">
+          <p className="text-xs font-medium text-zinc-200">{user.display_name}</p>
+          <p className="text-[11px] text-zinc-500">{user.email}</p>
+        </div>
+        <Button size="sm" variant="ghost" onClick={onLogout} aria-label="Sign out">
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Sign out</span>
+        </Button>
       </div>
     </header>
   );
 };
-

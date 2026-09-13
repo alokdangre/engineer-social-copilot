@@ -28,3 +28,40 @@ The agent analyzes, researches, recommends, drafts, and learns. The user reviews
 ## Core product rule
 
 The agent must help the user become more visible without fabricating expertise, experiences, opinions, relationships, or results. Every personal claim should trace to evidence or explicit user confirmation, and every external action remains under the user's control.
+
+## Authentication and connected accounts
+
+Users create an account or sign in to the web application. GitHub, X, and LinkedIn are then
+connected through each provider's official OAuth login page; users never enter an OAuth client
+secret or personal access token in the UI. Connector tokens are encrypted and stored against the
+authenticated application user.
+
+```env
+APP_SECRET_KEY=<stable-random-production-secret>
+FRONTEND_APP_URL=https://your-frontend.example
+OAUTH_CALLBACK_BASE_URL=https://your-backend.example/api/v1/connectors
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+X_CLIENT_ID=
+X_CLIENT_SECRET=
+LINKEDIN_CLIENT_ID=
+LINKEDIN_CLIENT_SECRET=
+```
+
+Register these exact callback URLs in the corresponding provider applications:
+
+```text
+https://your-backend.example/api/v1/connectors/github/callback
+https://your-backend.example/api/v1/connectors/x/callback
+https://your-backend.example/api/v1/connectors/linkedin/callback
+```
+
+Configure the frontend deployment with the server-only backend origin:
+
+```env
+BACKEND_URL=https://your-backend.example
+```
+
+The frontend proxies API requests through its own origin so the application session stays in a
+secure HTTP-only cookie. Keep `APP_SECRET_KEY` stable across deployments because it signs user
+sessions and encrypts stored connector credentials.

@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  Share2,
   CheckCircle,
   RefreshCw,
   Shield,
-  Key,
   ExternalLink,
   Clock,
   AlertTriangle,
@@ -19,17 +17,12 @@ import type { ConnectorAccount } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/Card";
-import { Modal } from "@/components/ui/Modal";
-import { Input } from "@/components/ui/Input";
 
 export default function ConnectorsPage() {
   const [connectors, setConnectors] = useState<ConnectorAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
-
-  // Manual token modal
-  const [tokenModalPlatform, setTokenModalPlatform] = useState<string | null>(null);
-  const [manualToken, setManualToken] = useState("");
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -56,6 +49,50 @@ export default function ConnectorsPage() {
     loadConnectors();
   }, [loadConnectors]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("result");
+    if (result === null) return;
+
+    const platformName = (params.get("platform") || "account").toUpperCase();
+    if (result === "success") {
+      setToastMessage(platformName + " connected successfully.");
+      window.setTimeout(() => setToastMessage(null), 3500);
+    } else {
+      const messages: Record<string, string> = {
+        denied: platformName + " authorization was cancelled.",
+        invalid_callback: "The " + platformName + " callback was incomplete.",
+        invalid_state: "The " + platformName + " login expired. Please try again.",
+        not_configured: platformName + " OAuth is not configured by the administrator.",
+        provider_error: platformName + " could not complete the connection.",
+      };
+      setErrorMessage(messages[result] || platformName + " connection failed.");
+    }
+
+    params.delete("platform");
+    params.delete("result");
+    const remainingQuery = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (remainingQuery ? "?" + remainingQuery : "")
+    );
+  }, []);
+
+  const handleConnect = async (platform: string) => {
+    setErrorMessage(null);
+    setConnectingPlatform(platform);
+
+    try {
+      const authorization = await api.getAuthorizeUrl(platform);
+      window.location.assign(authorization.authorization_url);
+    } catch (err: unknown) {
+      setConnectingPlatform(null);
+      const msg = err instanceof Error ? err.message : "Failed to connect " + platform;
+      setErrorMessage(msg);
+    }
+  };
+
   const handleSync = async (platform: string) => {
     setSyncingPlatform(platform);
     try {
@@ -67,22 +104,6 @@ export default function ConnectorsPage() {
       setErrorMessage(msg);
     } finally {
       setSyncingPlatform(null);
-    }
-  };
-
-  const handleSaveToken = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tokenModalPlatform || !manualToken) return;
-
-    try {
-      await api.saveConnectorToken(tokenModalPlatform, manualToken);
-      showToast(`Saved token for ${tokenModalPlatform.toUpperCase()}. Connected successfully.`);
-      setTokenModalPlatform(null);
-      setManualToken("");
-      await loadConnectors();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to connect token";
-      setErrorMessage(msg);
     }
   };
 
@@ -145,7 +166,8 @@ export default function ConnectorsPage() {
           <Badge variant="primary" size="sm">Platform Boundaries</Badge>
         </div>
         <p className="mt-1 text-sm text-zinc-400">
-          Official API connectors with strict data privacy boundaries. Real connector implementations with mocked verification when credentials are not present.
+          Sign in through each platform&apos;s official authorization page. Access is isolated to
+          your account and can be revoked at any time.
         </p>
       </div>
 
@@ -219,16 +241,15 @@ export default function ConnectorsPage() {
               <CardFooter className="flex-col gap-2 pt-3">
                 <div className="flex items-center justify-between w-full gap-2">
                   <Button
-                    variant="outline"
+                    variant={isConnected ? "outline" : "primary"}
                     size="sm"
                     className="flex-1"
-                    onClick={() => {
-                      setTokenModalPlatform(p.id);
-                      setManualToken("");
-                    }}
+                    isLoading={connectingPlatform === p.id}
+                    disabled={isLoading || connectingPlatform !== null}
+                    onClick={() => handleConnect(p.id)}
                   >
-                    <Key className="h-3.5 w-3.5 mr-1" />
-                    Set Token
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                    {isConnected ? "Reconnect" : "Connect " + p.name}
                   </Button>
 
                   <Button
@@ -249,38 +270,6 @@ export default function ConnectorsPage() {
         })}
       </div>
 
-      {/* Manual Token Modal */}
-      <Modal
-        isOpen={Boolean(tokenModalPlatform)}
-        onClose={() => setTokenModalPlatform(null)}
-        title={`Configure ${tokenModalPlatform?.toUpperCase()} Access Token`}
-        description="Enter a personal access token or test token. All tokens are encrypted at rest with Fernet cryptography."
-      >
-        <form onSubmit={handleSaveToken} className="space-y-4">
-          <Input
-            label="Access Token / Secret"
-            type="password"
-            placeholder="Paste access token here..."
-            value={manualToken}
-            onChange={(e) => setManualToken(e.target.value)}
-            required
-          />
-
-          <p className="text-xs text-zinc-500">
-            Tokens are encrypted using the application secret key before storage. They are never sent to third-party services.
-          </p>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">
-            <Button variant="ghost" type="button" onClick={() => setTokenModalPlatform(null)}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit">
-              Connect Account
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }
-

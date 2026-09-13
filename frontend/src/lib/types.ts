@@ -82,6 +82,15 @@ export type ConnectorStatus =
   | "revoked"
   | "error";
 
+export interface UserAccount {
+  id: string;
+  email: string;
+  display_name: string;
+  timezone: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Recommendation {
   id: string;
   action_type: ActionType;
@@ -234,9 +243,10 @@ export interface ConnectorAccount {
   status: ConnectorStatus;
   external_user_id: string | null;
   username: string | null;
-  display_name: string | null;
-  profile_url: string | null;
-  last_synced_at: string | null;
+  scopes: string[];
+  token_expires_at: string | null;
+  last_sync_at: string | null;
+  last_error: string | null;
 }
 
 export interface WorkflowRun {
@@ -265,4 +275,3 @@ export interface SchedulerStatus {
   last_run_at: string | null;
   last_result: Record<string, unknown> | null;
 }
-

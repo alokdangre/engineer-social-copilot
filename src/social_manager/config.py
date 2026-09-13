@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     linkedin_client_id: str | None = None
     linkedin_client_secret: SecretStr | None = None
     oauth_callback_base_url: str = "http://localhost:8000/api/v1/connectors"
+    frontend_app_url: str = "http://localhost:3000"
+    session_cookie_name: str = "social_manager_session"
 
     connector_timeout_seconds: float = 20.0
     connector_max_retries: int = 3

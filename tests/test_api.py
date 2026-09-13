@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 import respx
 from httpx import AsyncClient, Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from social_manager.db.models import User
+from social_manager.db.models import ConnectorAccount, User
 
 
 @pytest.mark.asyncio
@@ -43,6 +47,16 @@ async def test_api_auth(anon_client: AsyncClient) -> None:
     token_data = token_resp.json()
     assert "access_token" in token_data
     assert token_data["token_type"] == "bearer"
+    assert "social_manager_session" in token_resp.cookies
+
+    # The browser can authenticate with the HTTP-only session cookie.
+    me_resp = await anon_client.get("/api/v1/users/me")
+    assert me_resp.status_code == 200
+    assert me_resp.json()["email"] == "newdev@example.com"
+
+    logout_resp = await anon_client.post("/api/v1/auth/logout")
+    assert logout_resp.status_code == 204
+    assert (await anon_client.get("/api/v1/users/me")).status_code == 401
 
 
 @pytest.mark.asyncio
@@ -163,7 +177,20 @@ async def test_api_content(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_api_connectors(client: AsyncClient) -> None:
+async def test_api_connectors(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    test_user: User,
+) -> None:
+    respx.post("https://github.com/login/oauth/access_token").mock(
+        return_value=Response(
+            200,
+            json={
+                "access_token": "gho_test_oauth_token",
+                "scope": "read:user user:email",
+            },
+        )
+    )
     respx.get("https://api.github.com/user").mock(
         return_value=Response(200, json={"id": 123, "login": "octo"})
     )
@@ -191,15 +218,26 @@ async def test_api_connectors(client: AsyncClient) -> None:
     # 1. Authorize endpoint
     auth_resp = await client.post("/api/v1/connectors/github/authorize")
     assert auth_resp.status_code == 200
-    assert "authorization_url" in auth_resp.json()
+    authorization_url = auth_resp.json()["authorization_url"]
+    oauth_state = parse_qs(urlparse(authorization_url).query)["state"][0]
 
-    # 2. Save token
-    tok_resp = await client.post(
-        "/api/v1/connectors/github/token",
-        json={"access_token": "gho_test_manual_token"},
+    # 2. Complete the provider login. State maps the callback to this app user.
+    callback_resp = await client.get(
+        "/api/v1/connectors/github/callback",
+        params={"code": "github_oauth_code", "state": oauth_state},
+        follow_redirects=False,
     )
-    assert tok_resp.status_code == 200
-    assert tok_resp.json()["status"] == "connected"
+    assert callback_resp.status_code == 303
+    assert callback_resp.headers["location"] == (
+        "http://localhost:3000/connectors?platform=github&result=success"
+    )
+    connected_account = await db_session.scalar(
+        select(ConnectorAccount).where(
+            ConnectorAccount.platform == "github",
+            ConnectorAccount.user_id == test_user.id,
+        )
+    )
+    assert connected_account is not None
 
     # 3. List connectors
     list_resp = await client.get("/api/v1/connectors")

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from urllib.parse import urlencode
 
-from social_manager.api.dependencies import CurrentUser, SessionDependency
+from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
+
+from social_manager.api.dependencies import CurrentUser, SessionDependency, SettingsDependency
 from social_manager.connectors.base import ConnectorError
 from social_manager.domain.enums import Platform
 from social_manager.domain.schemas import (
@@ -37,22 +40,40 @@ async def authorize_connector(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/{platform}/callback", response_model=ConnectorRead)
+def _oauth_result_redirect(
+    settings: SettingsDependency,
+    platform: Platform,
+    result: str,
+) -> RedirectResponse:
+    query = urlencode({"platform": platform.value, "result": result})
+    location = f"{settings.frontend_app_url.rstrip('/')}/connectors?{query}"
+    return RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/{platform}/callback")
 async def oauth_callback(
     platform: Platform,
     session: SessionDependency,
-    code: str = Query(min_length=1),
-    state_value: str = Query(alias="state", min_length=1),
-) -> ConnectorRead:
+    settings: SettingsDependency,
+    code: str | None = Query(default=None, min_length=1),
+    state_value: str | None = Query(default=None, alias="state", min_length=1),
+    error: str | None = Query(default=None),
+) -> RedirectResponse:
+    if error is not None:
+        return _oauth_result_redirect(settings, platform, "denied")
+    if code is None or state_value is None:
+        return _oauth_result_redirect(settings, platform, "invalid_callback")
     try:
-        account = await ConnectorService().complete_oauth(
+        await ConnectorService().complete_oauth(
             session, platform, code=code, state=state_value
         )
-    except (OAuthStateError, ConnectorConfigurationError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ConnectorError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return ConnectorRead.model_validate(account)
+    except OAuthStateError:
+        return _oauth_result_redirect(settings, platform, "invalid_state")
+    except ConnectorConfigurationError:
+        return _oauth_result_redirect(settings, platform, "not_configured")
+    except ConnectorError:
+        return _oauth_result_redirect(settings, platform, "provider_error")
+    return _oauth_result_redirect(settings, platform, "success")
 
 
 @router.post("/{platform}/token", response_model=ConnectorRead)
